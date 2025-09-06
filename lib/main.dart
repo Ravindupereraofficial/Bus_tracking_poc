@@ -1,8 +1,11 @@
 import 'dart:async';
 
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:location/location.dart';
+import 'package:sensors_plus/sensors_plus.dart';
+
 
 void main() {
   runApp(const MyApp());
@@ -64,6 +67,45 @@ class _MyHomePageState extends State<MyHomePage> {
   StreamSubscription<LocationData>? _locationSubscription;
   String? _error;
 
+  Duration sensorInterval = const Duration(milliseconds: 20);
+
+  UserAccelerometerEvent? _userAccelerometerEvent;
+  DateTime? _userAccelerometerUpdateTime;
+  static const Duration _ignoreDuration = Duration(milliseconds: 20);
+  int? _userAccelerometerLastInterval;
+
+  Future<void> _listenAccelerometer() async {
+    userAccelerometerEventStream(samplingPeriod: sensorInterval).listen(
+      (UserAccelerometerEvent event) {
+        final now = event.timestamp;
+        setState(() {
+          _userAccelerometerEvent = event;
+          if (_userAccelerometerUpdateTime != null) {
+            final interval = now.difference(_userAccelerometerUpdateTime!);
+            if (interval > _ignoreDuration) {
+              _userAccelerometerLastInterval = interval.inMilliseconds;
+            }
+          }
+        });
+        _userAccelerometerUpdateTime = now;
+      },
+      onError: (e) {
+        showDialog(
+          context: context,
+          builder: (context) {
+            return const AlertDialog(
+              title: Text("Sensor Not Found"),
+              content: Text(
+                "It seems that your device doesn't support User Accelerometer Sensor",
+              ),
+            );
+          },
+        );
+      },
+      cancelOnError: true,
+    );
+  }
+
   Future<void> _listenLocation() async {
     _locationSubscription = location.onLocationChanged
         .handleError((dynamic err) {
@@ -90,6 +132,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     _listenLocation();
+    _listenAccelerometer();
     // This method is rerun every time setState is called, for instance as done
     // by the _incrementCounter method above.
     //
@@ -127,6 +170,10 @@ class _MyHomePageState extends State<MyHomePage> {
           children: <Widget>[
             Text(
               '${_location != null ? 'Location: ${_location!.latitude}, ${_location!.longitude}' : 'Error: $_error'}',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            Text(
+              '${_userAccelerometerEvent != null ? 'Accelerometer: ${_userAccelerometerEvent!.x}, ${_userAccelerometerEvent!.y}, ${_userAccelerometerEvent!.z}' : 'Error: $_error'}',
               style: Theme.of(context).textTheme.headlineMedium,
             ),
           ],
